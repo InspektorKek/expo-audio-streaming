@@ -38,7 +38,10 @@ class AudioPlayer {
     self.buffersInQueue += 1
 
     player.scheduleBuffer(buffer) {
-      DispatchQueue.main.async {
+      DispatchQueue.main.async { [weak self] in
+        // MARK: - Review
+        // There is memory leak without weak self without weak self. See ARC.
+        guard let self else { return }
         self.buffersInQueue -= 1
         self.onBufferPlayed?(self.buffersInQueue)
         
@@ -48,7 +51,9 @@ class AudioPlayer {
       }
     }
   }
-
+  // MARK: - Review
+  // Where is that decoding executing? If it will be executed on the main thread it will couse a UI freeze. 
+  // I suggest to you do it on your own thread.
   func decodeAudioData(_ base64String: String) -> AVAudioPCMBuffer? {
     guard let data = Data(base64Encoded: base64String) else {
       print("Error decoding base64 data")
@@ -102,11 +107,14 @@ class AudioPlayer {
   
   func play() {
     let audioSession = AVAudioSession.sharedInstance()
+    // MARK: - Review
+    // force(!) try should be handled and throw appropriet error
     try! audioSession.setCategory(.playback, mode: .default)
     try! audioSession.setActive(true)
     
     engine.connect(player, to: engine.mainMixerNode, format: outputFormat)
-    
+    // MARK: - Review
+    // force(!) try should be handled and throw appropriet error
     try! engine.start()
     
     player.play()
@@ -114,7 +122,8 @@ class AudioPlayer {
   
   func pause() {
     player.pause()
-    
+    // MARK: - Review
+    // force(!) try should be handled and throw appropriet error
     try! AVAudioSession.sharedInstance().setActive(false)
   }
   
@@ -136,6 +145,8 @@ class AudioRecorder {
     guard !isRecording else { return }
     
     let audioSession = AVAudioSession.sharedInstance()
+    // MARK: - Review
+    // force(!) try should be handled and throw appropriet error
     try! audioSession.setCategory(.playAndRecord, mode: .voiceChat, options: [.duckOthers, .allowBluetooth, .allowAirPlay])
     try! audioSession.setActive(true)
 
@@ -145,7 +156,8 @@ class AudioRecorder {
     engine.inputNode.installTap(onBus: 0, bufferSize: 2048, format: recordingFormat) { [weak self] (buffer, _) in
       self?.processBuffer(buffer)
     }
-
+    // MARK: - Review
+    // force(!) try should be handled and throw appropriet error
     try! engine.start()
     isRecording = true
   }
@@ -156,6 +168,8 @@ class AudioRecorder {
     let audioDataSize = Int(audioBuffer.mDataByteSize)
     let audioData = audioBuffer.mData
 
+    // MARK: - Review
+    // Handle force(!) unwrap
     let data = Data(bytes: audioData!, count: audioDataSize)
     let base64String = data.base64EncodedString()
 
